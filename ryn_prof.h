@@ -1,7 +1,11 @@
 /*
-ryn_prof v0.01 - A simple, recursive profiler.
+ryn_prof v0.02 - A simple, recursive profiler. https://github.com/vitreousoul/ryn
 
 Written while following the "Performance-Aware Programming Series" at https://www.computerenhance.com/
+
+Version Log:
+    v0.02 Add memory bandwidth measurement, remove numeric typedefs
+    v0.01 Initial version
 
 License:
     Permission to use, copy, modify, and/or distribute this software for
@@ -73,56 +77,52 @@ int main(void)
 #include <x86intrin.h>
 #include <sys/time.h>
 
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef double f64;
-
 #ifndef PROFILER
 #define PROFILER 1
 #endif
 
 #define ArrayCount(a) ((sizeof(a))/(sizeof((a)[0])))
 
-u64 ReadCPUTimer(void);
-u64 ReadOSTimer(void);
+uint64_t ReadCPUTimer(void);
+uint64_t ReadOSTimer(void);
 void BeginProfile(void);
 void EndAndPrintProfile(void);
 
-inline u64 ReadCPUTimer(void)
+inline uint64_t ReadCPUTimer(void)
 {
     return __rdtsc();
 }
 
-static u64 GetOSTimerFreq(void)
+static uint64_t GetOSTimerFreq(void)
 {
     return 1000000;
 }
 
-u64 ReadOSTimer(void)
+uint64_t ReadOSTimer(void)
 {
     struct timeval Value;
     gettimeofday(&Value, 0);
-    u64 Result = GetOSTimerFreq()*(u64)Value.tv_sec + (u64)Value.tv_usec;
+    uint64_t Result = GetOSTimerFreq()*(uint64_t)Value.tv_sec + (uint64_t)Value.tv_usec;
     return Result;
 }
 
 static int EstimateCpuFrequency()
 {
-    u64 MillisecondsToWait = 100;
-    u64 OSFreq = GetOSTimerFreq();
-    u64 CPUStart = ReadCPUTimer();
-    u64 OSStart = ReadOSTimer();
-    u64 OSEnd = 0;
-    u64 OSElapsed = 0;
-    u64 OSWaitTime = OSFreq * MillisecondsToWait / 1000;
+    uint64_t MillisecondsToWait = 100;
+    uint64_t OSFreq = GetOSTimerFreq();
+    uint64_t CPUStart = ReadCPUTimer();
+    uint64_t OSStart = ReadOSTimer();
+    uint64_t OSEnd = 0;
+    uint64_t OSElapsed = 0;
+    uint64_t OSWaitTime = OSFreq * MillisecondsToWait / 1000;
     while(OSElapsed < OSWaitTime)
     {
         OSEnd = ReadOSTimer();
         OSElapsed = OSEnd - OSStart;
     }
-    u64 CPUEnd = ReadCPUTimer();
-    u64 CPUElapsed = CPUEnd - CPUStart;
-    u64 CPUFreq = 0;
+    uint64_t CPUEnd = ReadCPUTimer();
+    uint64_t CPUElapsed = CPUEnd - CPUStart;
+    uint64_t CPUFreq = 0;
     if(OSElapsed)
     {
         CPUFreq = OSFreq * CPUElapsed / OSElapsed;
@@ -137,50 +137,66 @@ static int EstimateCpuFrequency()
 
 typedef struct
 {
-    u64 ElapsedExclusive;
-    u64 ElapsedInclusive;
-    u64 HitCount;
+    uint64_t ElapsedExclusive;
+    uint64_t ElapsedInclusive;
+    uint64_t HitCount;
+    uint64_t ProcessedByteCount;
     char *Label;
 } timer_data;
 
 typedef struct
 {
     timer_data Timers[MAX_TIMERS];
-    u64 StartTime;
-    u64 EndTime;
+    uint64_t StartTime;
+    uint64_t EndTime;
 } profiler;
 static profiler GlobalProfiler;
-u32 GlobalActiveTimer;
+uint32_t GlobalActiveTimer;
 
 /* NOTE: We add 1 to TimerKey in order to reserve the 0 index for the root timer. */
 #define GET_TIMER_BY_KEY(TimerKey) (GlobalProfiler.Timers[(TimerKey) + 1])
 
-#define _BEGIN_TIMED_BLOCK(TimerKey, TargetTimer)                       \
-    u32 ParentTimer##TimerKey = GlobalActiveTimer;                      \
+#define _BEGIN_TIMED_BLOCK(TimerKey, TargetTimer, ByteCount)            \
+    uint32_t ParentTimer##TimerKey = GlobalActiveTimer;                      \
     GET_TIMER_BY_KEY(TimerKey).Label = #TimerKey;                       \
-    u64 OldTSCElapsedInclusive##TimerKey = GET_TIMER_BY_KEY(TimerKey).ElapsedInclusive; \
+    GET_TIMER_BY_KEY(TimerKey).ProcessedByteCount += ByteCount;         \
+    uint64_t OldTSCElapsedInclusive##TimerKey = GET_TIMER_BY_KEY(TimerKey).ElapsedInclusive; \
     TargetTimer = TimerKey + 1;                                         \
-    u64 StartTime##TimerKey = ReadCPUTimer();
+    uint64_t StartTime##TimerKey = ReadCPUTimer();
 
 #define _END_TIMED_BLOCK(TimerKey, TargetTimer)                         \
-    u64 Elapsed##TimerKey = ReadCPUTimer() - StartTime##TimerKey;       \
+    uint64_t Elapsed##TimerKey = ReadCPUTimer() - StartTime##TimerKey;       \
     TargetTimer = ParentTimer##TimerKey;                                \
     GlobalProfiler.Timers[ParentTimer##TimerKey].ElapsedExclusive -= Elapsed##TimerKey; \
     GET_TIMER_BY_KEY(TimerKey).ElapsedExclusive += Elapsed##TimerKey;   \
     GET_TIMER_BY_KEY(TimerKey).ElapsedInclusive = OldTSCElapsedInclusive##TimerKey + Elapsed##TimerKey; \
     GET_TIMER_BY_KEY(TimerKey).HitCount += 1
 
-#define BEGIN_TIMED_BLOCK(TimerKey) _BEGIN_TIMED_BLOCK(TimerKey, GlobalActiveTimer)
+#define BEGIN_BANDWIDTH_BLOCK(TimerKey, ByteCount) _BEGIN_TIMED_BLOCK(TimerKey, GlobalActiveTimer, ByteCount)
+#define BEGIN_TIMED_BLOCK(TimerKey) _BEGIN_TIMED_BLOCK(TimerKey, GlobalActiveTimer, 0)
 #define END_TIMED_BLOCK(TimerKey) _END_TIMED_BLOCK(TimerKey, GlobalActiveTimer)
 
-static void PrintTimeElapsed(u64 TotalElapsedTime, timer_data *Timer)
+static void PrintTimeElapsed(uint64_t TotalElapsedTime, uint64_t CPUFreq, timer_data *Timer)
 {
-    f64 Percent = 100.0 * ((f64)Timer->ElapsedExclusive / (f64)TotalElapsedTime);
+    double Percent = 100.0 * ((double)Timer->ElapsedExclusive / (double)TotalElapsedTime);
     printf("  %s[%llu]: %llu (%.2f%%", Timer->Label, Timer->HitCount, Timer->ElapsedExclusive, Percent);
     if(Timer->ElapsedInclusive != Timer->ElapsedExclusive)
     {
-        f64 PercentWithChildren = 100.0 * ((f64)Timer->ElapsedInclusive / (f64)TotalElapsedTime);
+        double PercentWithChildren = 100.0 * ((double)Timer->ElapsedInclusive / (double)TotalElapsedTime);
         printf(", %.2f%% w/children", PercentWithChildren);
+    }
+
+    if(Timer->ProcessedByteCount)
+    {
+        double Megabyte = 1024.0f*1024.0f;
+        double Gigabyte = Megabyte*1024.0f;
+
+        double Seconds = (double)Timer->ElapsedInclusive / (double)CPUFreq;
+        double BytesPerSecond = (double)Timer->ProcessedByteCount / Seconds;
+        double Megabytes = (double)Timer->ProcessedByteCount / (double)Megabyte;
+        double GigabytesPerSecond = BytesPerSecond / Gigabyte;
+
+        printf("  %.3fmb at %.2fgb/s", Megabytes, GigabytesPerSecond);
     }
     printf(")\n");
 }
@@ -193,22 +209,22 @@ void BeginProfile(void)
 void EndAndPrintProfile(void)
 {
     GlobalProfiler.EndTime = ReadCPUTimer();
-    u64 CPUFreq = EstimateCpuFrequency();
+    uint64_t CPUFreq = EstimateCpuFrequency();
 
-    u64 TotalElapsedTime = GlobalProfiler.EndTime - GlobalProfiler.StartTime;
+    uint64_t TotalElapsedTime = GlobalProfiler.EndTime - GlobalProfiler.StartTime;
 
     if(CPUFreq)
     {
-        float TotalElapsedTimeInMs = 1000.0 * (f64)TotalElapsedTime / (f64)CPUFreq;
+        float TotalElapsedTimeInMs = 1000.0 * (double)TotalElapsedTime / (double)CPUFreq;
         printf("\nTotal time: %0.4fms (CPU freq %llu)\n", TotalElapsedTimeInMs, CPUFreq);
     }
 
-    for(u32 TimerIndex = 0; TimerIndex < ArrayCount(GlobalProfiler.Timers); ++TimerIndex)
+    for(uint32_t TimerIndex = 0; TimerIndex < ArrayCount(GlobalProfiler.Timers); ++TimerIndex)
     {
         timer_data *Timer = GlobalProfiler.Timers + TimerIndex;
         if(Timer->ElapsedInclusive)
         {
-            PrintTimeElapsed(TotalElapsedTime, Timer);
+            PrintTimeElapsed(TotalElapsedTime, CPUFreq, Timer);
         }
     }
 }
@@ -217,8 +233,8 @@ void EndAndPrintProfile(void)
 
 typedef struct
 {
-    u64 StartTime;
-    u64 EndTime;
+    uint64_t StartTime;
+    uint64_t EndTime;
 } profiler;
 static profiler GlobalProfiler;
 
@@ -235,11 +251,11 @@ void BeginProfile(void)
 void EndAndPrintProfile()
 {
     GlobalProfiler.EndTime = ReadCPUTimer();
-    u64 CPUFreq = EstimateCpuFrequency();
-    u64 TotalElapsedTime = GlobalProfiler.EndTime - GlobalProfiler.StartTime;
+    uint64_t CPUFreq = EstimateCpuFrequency();
+    uint64_t TotalElapsedTime = GlobalProfiler.EndTime - GlobalProfiler.StartTime;
     if(CPUFreq)
     {
-        float TotalElapsedTimeInMs = 1000.0 * (f64)TotalElapsedTime / (f64)CPUFreq;
+        float TotalElapsedTimeInMs = 1000.0 * (double)TotalElapsedTime / (double)CPUFreq;
         printf("\nTotal time: %0.4fms (CPU freq %llu)\n", TotalElapsedTimeInMs, CPUFreq);
     }
 }
