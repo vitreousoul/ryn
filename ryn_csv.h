@@ -5,6 +5,7 @@
 #define b32 uint32_t
 #define u32 uint32_t
 #define u64 uint64_t
+#define s32 int32_t
 
 #define f32 float
 
@@ -76,6 +77,7 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
     b32 IsPotentialNumber = 0;
     b32 NumberIsNegative = 0;
     u32 I = 0;
+    s32 SizeOffset = -1;
 
     Value.Type = ryn_csv_value_String;
     Value.String.Data = Data;
@@ -111,34 +113,32 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
             ++I;
             break;
         }
-        else
+        else if (!InQuote && I + 1 < Size && Char == CR && Data[I + 1] == LF)
         {
-            if (Value.Quoted && Char == '"')
+            SizeOffset = 0;
+            break;
+        }
+        else if (Value.Quoted && Char == '"')
+        {
+            if (I + 1 < Size && Data[I + 1] == '"')
             {
-                if (I + 1 < Size && Data[I + 1] == '"')
-                {
-                    /* NOTE: Skip past the escaped double-quote. */
-                    ++I;
-                }
-                else
-                {
-                    InQuote = 0;
-                }
+                /* NOTE: Skip past the escaped double-quote. */
+                ++I;
+            }
+            else
+            {
+                InQuote = 0;
             }
         }
     }
-
-    Value.String.Size = I - 1;
-
-    Value.Size = I;
 
     if (Value.Quoted && I == 3)
     {
         Value.Type = ryn_csv_value_Empty;
     }
-    /* TODO: Check if value is quoted and if the size is that of the empty string.
-       If so, set the type to Empty.
-    */
+
+    Value.String.Size = I + SizeOffset;
+    Value.Size = I;
 
     return Value;
 }
@@ -148,6 +148,7 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
 #undef b32
 #undef u32
 #undef u64
+#undef s32
 
 #undef f32
 

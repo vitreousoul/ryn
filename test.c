@@ -15,8 +15,8 @@ static unsigned long GetStringLength(char *Data)
 
 static void TestFunction(void)
 {
-    /* char *Data = "2024/01/26,\"0Some Text with a numeric start\",\"0.12\",\"1,234.56\""; */
-    char *Data = "\"one\",\"\",three,,";
+    char *Data = "2024/01/26,\"0Some Text with a numeric start\",\"0.12\",\"1,234.56\"\r\n";
+    /* char *Data = "\"one\",\"\",three,,"; */
     unsigned long Size = GetStringLength(Data);
     unsigned long I = 0;
 
