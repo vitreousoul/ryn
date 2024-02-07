@@ -66,42 +66,49 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size);
 ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
 {
     ryn_csv_value Value = {0};
+
+    if (!Size)
+    {
+        return Value;
+    }
     
     b32 InQuote = 0;
     b32 IsPotentialNumber = 0;
     b32 NumberIsNegative = 0;
-    u32 I;
+    u32 I = 0;
 
     Value.Type = ryn_csv_value_String;
     Value.String.Data = Data;
 
-    for (I = 0; I < Size; ++I)
+    if (Data[0] == CR)
+    {
+        if (Size >= 1 && Data[1] == LF)
+        {
+            Value.Type = ryn_csv_value_NewRow;
+            return Value;
+        }
+    }
+    else if (I == 0 && Data[0] == ',')
+    {
+        ++I;
+        Value.Type = ryn_csv_value_Empty;
+        return Value;
+    }
+
+    if (Data[0] == '"')
+    {
+        Value.Quoted = 1;
+        InQuote = 1;
+        ++I;
+    }
+
+    for (; I < Size; ++I)
     {
         char Char = Data[I];
 
-        if (I == 0 && Char == CR)
-        {
-            if (I + 1 < Size && Data[I + 1] == LF)
-            {
-                ++I;
-                Value.Type = ryn_csv_value_NewRow;
-                break;
-            }
-        }
-        else if (I == 0 && Char == '"')
-        {
-            Value.Quoted = 1;
-            InQuote = 1;
-        }
-        else if (!InQuote && Char == ',')
+        if (!InQuote && Char == ',')
         {
             ++I;
-            break;
-        }
-        else if (I == 0 && Char == ',')
-        {
-            ++I;
-            Value.Type = ryn_csv_value_Empty;
             break;
         }
         else
@@ -124,6 +131,11 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
     Value.String.Size = I - 1;
 
     Value.Size = I;
+
+    if (Value.Quoted && I == 3)
+    {
+        Value.Type = ryn_csv_value_Empty;
+    }
     /* TODO: Check if value is quoted and if the size is that of the empty string.
        If so, set the type to Empty.
     */
