@@ -177,6 +177,7 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
 
 
 
+
 #undef b32
 #undef u32
 #undef u64
@@ -190,3 +191,4 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
 #undef IS_DIGIT
 #undef IS_START_OF_VALUE
 #undef IS_START_OF_NUMBER
+#undef IS_NUMERIC
