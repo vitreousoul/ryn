@@ -25,7 +25,7 @@ static void TestFunction(void)
         char *OffsetData = Data + I;
         ryn_csv_value Value = ryn_csv_ParseCsvValue(OffsetData, Size - I);
 
-        printf("\nValue:\n  Type: %d\n  Size: %d\n  Quoted: %d\n  String: ", Value.Type, Value.Size, Value.Quoted);
+        printf("\nValue:\n  Type: %s\n  Size: %d\n  Quoted: %d\n  String: ", ryn_csv_StringOfCsvType(Value.Type), Value.Size, Value.Quoted);
 
         if (!Value.Quoted) printf("\"");
         for (unsigned long C = 0; C < Value.String.Size; ++C)

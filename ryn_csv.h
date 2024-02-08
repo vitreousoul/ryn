@@ -16,6 +16,7 @@
                         (Char) == '5' || (Char) == '6' || (Char) == '7' || (Char) == '8' || (Char) == '9')
 #define IS_START_OF_VALUE(I, Quoted) (((Quoted) && I == 1) || (!(Quoted) && I == 0))
 #define IS_START_OF_NUMBER(Char) (IS_DIGIT(Char) || (Char) == '-' || (Char) == '+' || (Char) == '.')
+#define IS_NUMERIC(Char) (IS_DIGIT(Char) || (Char) == ',' || (Char) == '.')
 
 
 
@@ -30,6 +31,7 @@ typedef enum
     ryn_csv_value_Unknown,
     ryn_csv_value_Empty,
     ryn_csv_value_NewRow,
+    ryn_csv_value_Numeric,
     ryn_csv_value_Integer,
     ryn_csv_value_Float,
     ryn_csv_value_String,
@@ -60,9 +62,25 @@ typedef struct
 
 
 
+char *ryn_csv_StringOfCsvType(ryn_csv_value_type Type);
 ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size);
 
 
+
+char *ryn_csv_StringOfCsvType(ryn_csv_value_type Type)
+{
+    switch (Type)
+    {
+    case ryn_csv_value_Unknown: return "Unknown";
+    case ryn_csv_value_Empty: return "Empty";
+    case ryn_csv_value_NewRow: return "NewRow";
+    case ryn_csv_value_Numeric: return "Numeric";
+    case ryn_csv_value_Integer: return "Integer";
+    case ryn_csv_value_Float: return "Float";
+    case ryn_csv_value_String: return "String";
+    default: return "";
+    }
+}
 
 ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
 {
@@ -104,6 +122,12 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
         ++I;
     }
 
+    if (IS_START_OF_NUMBER(Data[I]))
+    {
+        IsPotentialNumber = 1;
+        Value.Type = ryn_csv_value_Numeric;
+    }
+
     for (; I < Size; ++I)
     {
         char Char = Data[I];
@@ -128,6 +152,14 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
             else
             {
                 InQuote = 0;
+            }
+        }
+        else if (IsPotentialNumber)
+        {
+            if (!IS_NUMERIC(Data[I]))
+            {
+                Value.Type = ryn_csv_value_String;
+                IsPotentialNumber = 0;
             }
         }
     }
