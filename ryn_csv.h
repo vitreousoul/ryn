@@ -1,5 +1,4 @@
 #include <stdint.h>
-/* #include <math.h> */
 #include <stdlib.h>
 
 /* TODO: #undef all #define's */
