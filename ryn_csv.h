@@ -1,4 +1,6 @@
 #include <stdint.h>
+/* #include <math.h> */
+#include <stdlib.h>
 
 /* TODO: #undef all #define's */
 
@@ -64,6 +66,7 @@ typedef struct
 
 char *ryn_csv_StringOfCsvType(ryn_csv_value_type Type);
 ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size);
+ryn_csv_value ryn_csv_ParseNumber(ryn_csv_value Value);
 
 
 
@@ -82,6 +85,95 @@ char *ryn_csv_StringOfCsvType(ryn_csv_value_type Type)
     }
 }
 
+ryn_csv_value ryn_csv_ParseNumber(ryn_csv_value StringValue)
+{
+    ryn_csv_value Value = {0};
+    char *Data = StringValue.String.Data;
+    s32 Size = StringValue.String.Size;
+    b32 IsFloat = 0;
+    b32 IsNan = 0;
+
+    s32 I = 0;
+
+    if (!Size || !IS_START_OF_NUMBER(Data[0]))
+    {
+        return Value;
+    }
+
+    if (Data[0] == '+')
+    {
+        ++I;
+    }
+    else if (Data[0] == '-')
+    {
+        ++I;
+    }
+    else if (Data[0] == '.')
+    {
+        IsFloat = 1;
+        ++I;
+    }
+
+    for (; I < Size; ++I)
+    {
+        if (Data[I] == ',')
+        {
+            /* skip */
+        }
+        else if (Data[I] == '.')
+        {
+            if (IsFloat)
+            {
+                IsNan = 1;
+                break;
+            }
+            else
+            {
+                IsFloat = 1;
+            }
+        }
+        else if (!IS_DIGIT(Data[I]))
+        {
+            IsNan = 1;
+            break;
+        }
+    }
+
+    if (!IsNan)
+    {
+        char ConversionBuffer[1024];
+        s32 ConversionIndex = 0;
+
+        for (I = 0; I < Size; ++I)
+        {
+            if (ConversionIndex == 1023)
+            {
+               break;
+            }
+            if (Data[I] != ',')
+            {
+                ConversionBuffer[ConversionIndex] = StringValue.String.Data[I];
+                ConversionIndex += 1;
+            }
+        }
+
+        ConversionBuffer[ConversionIndex] = 0;
+
+        if (IsFloat)
+        {
+            Value.Type = ryn_csv_value_Float;
+            Value.Float = atof(ConversionBuffer);
+        }
+        else
+        {
+            Value.Type = ryn_csv_value_Integer;
+            Value.Integer = atoi(ConversionBuffer);;
+        }
+    }
+
+    return Value;
+}
+
 ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
 {
     ryn_csv_value Value = {0};
@@ -93,7 +185,6 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
     
     b32 InQuote = 0;
     b32 IsPotentialNumber = 0;
-    b32 NumberIsNegative = 0;
     u32 I = 0;
     s32 SizeOffset = -1;
 
@@ -105,6 +196,7 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
         if (Size >= 1 && Data[1] == LF)
         {
             Value.Type = ryn_csv_value_NewRow;
+            Value.Size = 2;
             return Value;
         }
     }
@@ -112,6 +204,7 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
     {
         ++I;
         Value.Type = ryn_csv_value_Empty;
+        Value.Size = 1;
         return Value;
     }
 
@@ -119,6 +212,7 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
     {
         Value.Quoted = 1;
         InQuote = 1;
+        Value.String.Data = Data + 1;
         ++I;
     }
 
@@ -169,7 +263,9 @@ ryn_csv_value ryn_csv_ParseCsvValue(char *Data, u64 Size)
         Value.Type = ryn_csv_value_Empty;
     }
 
-    Value.String.Size = I + SizeOffset;
+    s32 QuotedStringOffset = Value.Quoted ? -2 : 0;
+
+    Value.String.Size = I + SizeOffset + QuotedStringOffset;
     Value.Size = I;
 
     return Value;

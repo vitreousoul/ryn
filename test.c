@@ -20,7 +20,7 @@ static void TestFunction(void)
     unsigned long Size = GetStringLength(Data);
     unsigned long I = 0;
 
-    while (I < Size)
+    while (I < Size && Data[I])
     {
         char *OffsetData = Data + I;
         ryn_csv_value Value = ryn_csv_ParseCsvValue(OffsetData, Size - I);
