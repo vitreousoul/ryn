@@ -13,8 +13,7 @@
 #define RYN_CSV_MAX_VALUE_COUNT 8192
 
 #define IS_FIRST_CHAR(I, Quoted) ((!(Quoted) && (I) == 0) || ((Quoted) && (I) == 1))
-#define IS_DIGIT(Char) ((Char) == '0' || (Char) == '1' || (Char) == '2' || (Char) == '3' || (Char) == '4' || \
-                        (Char) == '5' || (Char) == '6' || (Char) == '7' || (Char) == '8' || (Char) == '9')
+#define IS_DIGIT(Char) ((Char) >= '0' && (Char) <= '9')
 #define IS_START_OF_VALUE(I, Quoted) (((Quoted) && I == 1) || (!(Quoted) && I == 0))
 #define IS_START_OF_NUMBER(Char) (IS_DIGIT(Char) || (Char) == '-' || (Char) == '+' || (Char) == '.')
 #define IS_NUMERIC(Char) (IS_DIGIT(Char) || (Char) == ',' || (Char) == '.')
@@ -36,6 +35,7 @@ typedef enum
     ryn_csv_value_Integer,
     ryn_csv_value_Float,
     ryn_csv_value_String,
+    ryn_csv_value_Date,
 } ryn_csv_value_type;
 
 typedef struct
